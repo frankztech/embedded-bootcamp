@@ -19,6 +19,8 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "spi.h"
+#include "tim.h"
 #include "usart.h"
 #include "gpio.h"
 
@@ -34,6 +36,8 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+#define ADC_CS_PORT GPIOB
+#define ADC_CS_PIN  GPIO_PIN_8
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -44,7 +48,8 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-
+uint8_t tx[3] = {0x01, 0x80, 0x00}; // Start, SGL/DIFF + CH0, dummy
+uint8_t rx[3] = {0};
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -55,7 +60,20 @@ void SystemClock_Config(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+static inline void cs_low(void){ HAL_GPIO_WritePin(ADC_CS_PORT, ADC_CS_PIN, GPIO_PIN_RESET); }
+static inline void cs_high(void){ HAL_GPIO_WritePin(ADC_CS_PORT, ADC_CS_PIN, GPIO_PIN_SET); }
 
+static uint16_t mcp3004_read(uint8_t ch){
+  uint8_t tx[3] = {0x01, (uint8_t)(0x80 | (ch << 4)), 0x00}; // start, single-ended+channel, dummy
+  uint8_t rx[3] = {0};
+
+  cs_low();
+  HAL_StatusTypeDef st = HAL_SPI_TransmitReceive(&hspi1, tx, rx, 3, HAL_MAX_DELAY);
+  cs_high();
+  if (st != HAL_OK) return 0;
+
+  return (uint16_t)(((rx[1] & 0x03) << 8) | rx[2]);  // 10-bit value: 0..1023
+}
 /* USER CODE END 0 */
 
 /**
@@ -87,14 +105,27 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_USART2_UART_Init();
+  MX_SPI1_Init();
+  MX_TIM1_Init();
   /* USER CODE BEGIN 2 */
-
+  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+	  // Read pot on CH0; change the 0 to 1/2/3 if your board uses another channel
+	   uint16_t adc = mcp3004_read(0);        // 0..1023
+
+	   // Map 0..1023 -> 1000..2000 counts (1–2 ms) with 1 µs timer tick
+	   uint16_t pulse = 1000 + (adc * 1000) / 1023;
+	   if (pulse < 1000) pulse = 1000;
+	   if (pulse > 2000) pulse = 2000;
+
+	   __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, pulse);  // update PWM duty
+
+	   HAL_Delay(10);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
