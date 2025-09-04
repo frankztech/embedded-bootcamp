@@ -119,9 +119,9 @@ int main(void)
 	   uint16_t adc = mcp3004_read(0);        // 0..1023
 
 	   // Map 0..1023 -> 1000..2000 counts (1–2 ms) with 1 µs timer tick
-	   uint16_t pulse = 1000 + (adc * 1000) / 1023;
-	   if (pulse < 1000) pulse = 1000;
-	   if (pulse > 2000) pulse = 2000;
+	   uint16_t pulse = 3200 + (adc * 3200) / 1023;
+	   if (pulse < 3200) pulse = 3200;
+	   if (pulse > 6400) pulse = 6400;
 
 	   __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, pulse);  // update PWM duty
 
